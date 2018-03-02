@@ -1,0 +1,20 @@
+{
+  "name": "airdropper",
+  "version": "0.0.1",
+  "description": "A basic tool to help with large Ethereum airdrops",
+  "main": "airdropper.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": "git@github.com:iosiro/airdropper.git",
+  "author": "Kyle <syncikin@gmail.com>",
+  "license": "ISC",
+  "dependencies": {
+    "bignumber.js": "^6.0.0",
+    "cli-progress": "^1.7.0",
+    "fast-csv": "^2.4.1",
+    "fs": "0.0.1-security",
+    "web3": "^1.0.0-beta.30",
+    "zeppelin-solidity": "^1.7.0"
+  }
+}
