@@ -1,27 +1,25 @@
+var numTokens = require('../config').numTokens;
+var batchSize = require('../config').batchSize;
+var gasPrice = require('../config').gasPrice;
 var web3 = require('web3')
 var fs = require('fs');
 var csv = require('fast-csv');
 var bignumber = require('BigNumber.js');
 var _progress = require('cli-progress');
-var batchesProgress = new _progress.Bar({}, _progress.Presets.shades_classic);
 var Airdropper = artifacts.require('./Airdropper.sol');
-let batchData = new Array();
-let singleBatch = new Array();
+let batchDataAddresses = new Array();
+let batchDataTokens = new Array();
+let singleBatchAddresses = new Array();
+let singleBatchTokens = new Array();
 var totalWeiSpent = 0;
-
-//TODO doesn't work with truffle develop as it passes develop params not exec params
-//const airdropContractAddress = process.argv.slice(2)[0];
-//let BATCH_SIZE = process.argv.slice(2)[1];
 var airdropContractAddress = Airdropper.address;
-let BATCH_SIZE = 100;
+var batchIndex = 0;
+var paidAddresses = 0;
+var dynamic = false;
+var tokensSent = 0;
 
 if (!airdropContractAddress) {
-    console.error("Missing airdrop contract address");
-}
-
-if (!BATCH_SIZE) {
-    BATCH_SIZE = 80;
-    console.warn(`Defaulting to a batch size of ${BATCH_SIZE}`);
+    console.error("Missing airdrop contract address. Remember to migrate.");
 }
 
 function parseFile() {
@@ -30,85 +28,96 @@ function parseFile() {
     let batch = 0;
     let numAddresses = 0;
     let failedAddresses = 0;
+    let failedNumbers = 0;
 
     var csvStream = csv()
         .on("data", function (data) {
             let address = data[0];
+            var numTokens = 0;
+
+            if (data.length > 1) {
+                var numTokens = data[1];
+                dynamic = true;
+            } 
+            
             let isAddress = web3.utils.isAddress(address);
             if (isAddress) {
-                singleBatch.push(address);
+                singleBatchAddresses.push(address);
+                if (isNaN(numTokens)) {
+                    singleBatchTokens.push(0);
+                    failedNumbers++;
+                    console.warn(`Failed to parse token number for: ${address}`);
+                } else {
+                    singleBatchTokens.push(numTokens);
+                }
                 index++;
                 numAddresses++;
-                if (index >= BATCH_SIZE) {
-                    batchData.push(singleBatch);
-                    singleBatch = [];
+                if (index >= batchSize) {
+                    batchDataAddresses.push(singleBatchAddresses);
+                    batchDataTokens.push(singleBatchTokens);
+                    singleBatchAddresses = [];
+                    singleBatchTokens = [];
                     index = 0;
                 }
             } else {
                 failedAddresses++;
-                console.warn(`Invalid address: ${address}`)
+                console.warn(`Invalid address: ${address}`);
             }
+
         })
         .on("end", function () {
             // Add the addresses that didn't fit into the last batch
-            batchData.push(singleBatch);
-            singleBatch = [];
+            if (singleBatchAddresses.length > 0) {
+                batchDataAddresses.push(singleBatchAddresses);
+                batchDataTokens.push(singleBatchTokens);
+                singleBatchAddresses = [];
+                singleBatchTokens = [];
+            }
 
             console.log(`\nParsed a total of ${numAddresses} addresses`)
-            console.log(`Using ${batchData.length} batches of ${BATCH_SIZE} addresses`)
+            console.log(`Using ${batchDataAddresses.length} batches of ${batchSize} addresses`)
             console.log(`Failed to parse ${failedAddresses} addresses`)
-
-            allocateTokens()
-            .then(() => console.log(`\n\nSpent a total of ${totalWeiSpent/(10**18)} ether`));
+            console.log(`Failed to parse ${failedNumbers} token numbers`)
             
+            allocateTokens()
+                .then(() => console.log(`\nTransferred tokens to ${paidAddresses} addresses.\nSpent a total of ${totalWeiSpent / (10 ** 18)} ether.\nEquates to a total of ${web3.utils.fromWei((parseInt(totalWeiSpent / paidAddresses) || 0) + '', 'ether')} gwei per address\nSent a total of ${tokensSent} tokens.`));
         });
     stream.pipe(csvStream);
 }
 
-console.log(`Batch size is ${BATCH_SIZE} addresses per transaction`);
+console.log(`Batch size is ${batchSize} addresses per transaction`);
 parseFile();
 
 async function allocateTokens() {
-    console.log(`Allocating tokens...\n`);
-    //let accounts = await web3.eth.getAccounts();
+    console.log(`\nAllocating tokens...`);
+    console.log(`Gas price set to ${web3.utils.fromWei(gasPrice + '', 'gwei')} gwei for batch transactions`);
+    
     let airdropper = await Airdropper.at(airdropContractAddress);
     let airdropTokens = await airdropper.airdropTokens();
-    batchesProgress.start(batchData.length, 0);
-    for (var i = 0; i < batchData.length; i++) {
+    
+    for (var i = batchIndex; i < batchDataAddresses.length; i++) {
         try {
-            let gPrice = web3.utils.toWei('5', 'gwei');
-            batchesProgress.update(i+1);
-            let res = await airdropper.airdrop(batchData[i])
-            let weiSpent = res.receipt.gasUsed * gPrice;
-            totalWeiSpent += weiSpent;
+            if(typeof batchDataAddresses[i][0] == 'undefined' || await airdropper.tokensReceived(batchDataAddresses[i][0])) {
+                console.log(`Addresses in batch ${i+1} have already received tokens. Skipping.`);
+                continue;
+            }
+            var res;
+            var tokensInBatch = 0;
+            if (dynamic) {
+                res = await airdropper.airdropDynamic(batchDataAddresses[i], batchDataTokens[i], { gasPrice: gasPrice });
+                tokensInBatch = batchDataTokens[i].reduce((a, b) => parseInt(a) + parseInt(b), 0);
+            } else {
+                res = await airdropper.airdrop(batchDataAddresses[i], { gasPrice: gasPrice });
+                tokensInBatch += batchDataAddresses[i].length * numTokens;
+            }
+            paidAddresses += batchDataAddresses[i].length;
+            totalWeiSpent += res.receipt.gasUsed * gasPrice;
+            tokensSent += tokensInBatch;
+            console.log(`Batch ${i + 1}/${batchDataAddresses.length} (${i * batchSize}-${(i + 1) * batchSize}) has finished transferring tokens to ${batchDataAddresses[i].length} addresses. Sent a total of ${tokensInBatch} tokens in this batch.\nSpent ${web3.utils.fromWei(res.receipt.gasUsed * gasPrice + '', 'gwei')} gwei on this batch.`);
         } catch (err) {
-            console.error(`\n\nError while allocating tokens to batch ${i+1} (${i*BATCH_SIZE}-${(i+1)*BATCH_SIZE})\n`)
+            console.error(`\n\nError while allocating tokens to batch ${i + 1} (${i * batchSize}-${(i + 1) * batchSize})\n`)
             console.error(err);
             break;
         }
     }
 }
-
-
-/* 
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-console.log("Allocation completed");
-console.log("Waiting for transactions to be mined...");
-delay(1200);
-console.log("Retrieving logs to calculate total amount of tokens allocated so far. This may take a while...")
-let polytokenAddress = await polyDistribution.POLY({ from: accounts[0] });
-let polyToken = await PolyToken.at(polytokenAddress);
-var sumAccounts = 0;
-var sumTokens = 0;
-var events = await polyToken.Transfer({ from: polyDistribution.address }, { fromBlock: 0, toBlock: 'latest' });
-events.get(function (error, log) {
-    event_data = log;
-    for (var i = 0; i < event_data.length; i++) {
-        //let tokens = event_data[i].args.value.times(10 ** -18).toString(10);
-        //let addressB = event_data[i].args.to;
-        sumTokens += event_data[i].args.value.times(10 ** -18).toNumber();
-        sumAccounts += 1;
-        //console.log(`Distributed ${tokens} POLY to address ${addressB}`);
-    }
-    console.log(`A total of ${sumTokens} tokens have been distributed to ${sumAccounts} accounts so far.`);
-}); */
