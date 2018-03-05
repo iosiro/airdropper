@@ -7,14 +7,12 @@ import 'zeppelin-solidity/contracts/token/ERC20/ERC20.sol';
 contract Airdropper is Ownable {
     using SafeMath for uint256;
     uint256 public airdropTokens;
-    uint256 public decimalFactor;
     uint256 public totalClaimed;
     uint256 public amountOfTokens;
     mapping (address => bool) public tokensReceived;
     ERC20 public token;
 
     function Airdropper(uint256 _amount) public {
-        decimalFactor = 10**18;
         totalClaimed = 0;
         amountOfTokens = _amount;
     }
@@ -22,19 +20,25 @@ contract Airdropper is Ownable {
     function airdrop(address[] _recipients) public onlyOwner {        
         for (uint256 i = 0; i < _recipients.length; i++) {
             if (!tokensReceived[_recipients[i]]) {
-                require(token.transfer(_recipients[i], amountOfTokens * decimalFactor));
+                require(token.transfer(_recipients[i], amountOfTokens));
                 tokensReceived[_recipients[i]] = true;
+            } else {
+                // Save gas
+                return;
             }
         }
-        totalClaimed = totalClaimed.add(amountOfTokens * decimalFactor * _recipients.length);
+        totalClaimed = totalClaimed.add(amountOfTokens * _recipients.length);
     }
 
     function airdropDynamic(address[] _recipients, uint256[] _amount) public onlyOwner {
         for (uint256 i = 0; i < _recipients.length; i++) {
             if (!tokensReceived[_recipients[i]]) {    
-                require(token.transfer(_recipients[i], _amount[i] * decimalFactor));
+                require(token.transfer(_recipients[i], _amount[i]));
                 tokensReceived[_recipients[i]] = true; 
-                totalClaimed = totalClaimed.add(_amount[i] * decimalFactor);
+                totalClaimed = totalClaimed.add(_amount[i]);
+            } else {
+                // Save gas
+                return;
             }
         }
     }
@@ -47,7 +51,7 @@ contract Airdropper is Ownable {
         token = ERC20(_tokenAddress);
     }
 
-    function setTokenNumber(uint256 _amount) public onlyOwner {
+    function setTokenAmount(uint256 _amount) public onlyOwner {
         amountOfTokens = _amount;
     }
 

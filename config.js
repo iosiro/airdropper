@@ -1,5 +1,5 @@
 module.exports = {
-    numTokens: 100,
+    numTokens: 1,
     batchSize: 75,
-    gasPrice: 1000000000
+    gasPrice: 2010000000,
 }
