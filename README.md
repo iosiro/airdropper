@@ -73,6 +73,7 @@ A helper script is provided to perform this across a master file of all addresse
 
 ### Config
 ```config.js``` can be edited to adjust the parameters of the airdrop.
+
 | Field | Description |
 | ------ | ------ |
 | numTokens | The number of tokens sent to each address in a static airdrop. This value is ignored for a dynamic airdrop. |

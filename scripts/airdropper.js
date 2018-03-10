@@ -13,6 +13,10 @@ var timeout = require('../config').timeout;
 // Calculate number of iterations to enforce timeout
 timeout = (timeout - 4) * 60 / 10;
 
+// TODO test latest verion
+// TODO update config to remove airdrop addresses
+// TODO check requirements / install
+
 async function parseFile(airdropContractOwner, airdropContractAddress, filename) {
     let stream = fs.createReadStream("data/" + filename);
     let index = 0;
@@ -162,64 +166,3 @@ async function allocateTokens(airdropper, owner, batch, tokenAmounts) {
     }
 }
 
-
-//TODO make it possible for multiple people to call the contract to parallelise the process
-
-
-// async function allocateTokens(batchDataAddresses, batchDataTokens) {
-//     console.log(`\nAllocating tokens...`);
-//     console.log(`Gas price set to ${web3.utils.fromWei(gasPrice + '', 'gwei')} gwei for batch transactions`);
-
-//     let airdropper = await Airdropper.at(airdropContractAddress);
-//     let airdropTokens = await airdropper.airdropTokens();
-//     let staticNumTokens = await airdropper.amountOfTokens();
-
-//     for (let i = batchIndex; i < batchDataAddresses.length; i++) {
-//         try {
-//             if (typeof batchDataAddresses[i][0] == 'undefined' || await airdropper.tokensReceived(batchDataAddresses[i][0])) {
-//                 console.log(`Addresses in batch ${i + 1} have already received tokens. Skipping.`);
-//                 continue;
-//             }
-//             var res;
-//             var tokensInBatch = 0;
-//             if (dynamic) {
-//                 res = await airdropper.airdropDynamic(batchDataAddresses[i], batchDataTokens[i], { gasPrice: gasPrice, gas: gasLimit });
-//                 tokensInBatch = batchDataTokens[i].reduce((a, b) => web3.utils.toBN(a).add(web3.utils.toBN(b)), 0);
-//             } else {
-//                 res = await airdropper.airdrop(batchDataAddresses[i], { gasPrice: gasPrice, gas: gasLimit });
-//                 tokensInBatch = web3.utils.toBN(staticNumTokens).mul(web3.utils.toBN(batchDataAddresses[i].length));
-//             }
-
-//             paidAddresses += batchDataAddresses[i].length;
-//             totalWeiSpent += res.receipt.gasUsed * gasPrice;
-//             tokensSent = tokensSent.add(tokensInBatch);
-
-//             console.log(`Batch ${i + 1}/${batchDataAddresses.length} (${i * batchSize}-${(i + 1) * batchSize}) has finished transferring tokens to ${batchDataAddresses[i].length} addresses. Sent a total of ${web3.utils.fromWei(tokensInBatch + '', 'ether')} tokens in this batch.\nSpent ${web3.utils.fromWei(res.receipt.gasUsed * gasPrice + '', 'gwei')} gwei on this batch.`);
-//         } catch (err) {
-//             if (err.toString().indexOf('240 seconds') > -1) {
-//                 console.warn(`Transaction has not been included in any blocks within 240 seconds, this is likely due to a low gas price or a loss of internet connectivity. Waiting a bit longer...`);
-//                 let iterations = 0;
-
-//                 while (!(await airdropper.tokensReceived(batchDataAddresses[i][0]))) {
-//                     if (iterations >= 126) {
-//                         console.log(`Failed to include transaction within 20 minutes, bailing as there may be a problem.`);
-//                         return;
-//                     }
-
-//                     function pause(milliseconds) {
-//                         var dt = new Date();
-//                         while ((new Date()) - dt <= milliseconds) { }
-//                     }
-//                     // Wait 10 seconds before checking if anything has changed.
-//                     pause(10000);
-//                     iterations++;
-//                 }
-//                 console.log(`Success! Managed to complete batch ${i + 1}/${batchDataAddresses.length}. Continuing.`);
-//             } else {
-//                 console.error(`\n\nError while allocating tokens to batch ${i + 1} (${i * batchSize}-${(i + 1) * batchSize})\n`)
-//                 console.error(err);
-//                 break;
-//             }
-//         }
-//     }
-// }
